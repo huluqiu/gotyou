@@ -5,8 +5,7 @@ headers = {'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_2) AppleW
 
 def pageProcessor(page):
     if page.tag is 'detail':
-        page.addTargetValue('detail', 'haha')
-        print(page.response)
+        page.addTargetValue('title', page.tree.xpath("//*[@id='article_details']//span[@class='link_title']/a/attribute::href"))
     else:
         page.addTargetValue('test', page.tree.xpath("//*[@id='article_list']//span[@class='link_title']/a/text()"))
         page.addRequest(page.tree.xpath("//*[@id='article_list']//span[@class='link_title']/a/attribute::href"), tag='detail', headers=headers)
