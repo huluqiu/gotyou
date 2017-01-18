@@ -1,1 +1,8 @@
+# os system
+.Ds_Store
+
 __pycache__/
+
+# Distribution
+dist/
+*.egg-info/
