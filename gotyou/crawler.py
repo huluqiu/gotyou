@@ -6,6 +6,15 @@ from lxml import etree
 from collections import deque
 
 
+def addRequestToList(l, url, tag=None, method='get', **kwargs):
+    if isinstance(url, str):
+        l.append((tag, method, url, kwargs))
+    elif isinstance(url, list):
+        l.extend(map(lambda x: (tag, method, x, kwargs), url))
+    else:
+        raise TypeError('url must be str or list')
+
+
 class Page(object):
 
     """Docstring for Page. """
@@ -29,12 +38,7 @@ class Page(object):
         return self._targetValues
 
     def addRequest(self, url, tag=None, method='get', **kwargs):
-        if isinstance(url, str):
-            self._targetRequests.append((tag, method, url, kwargs))
-        elif isinstance(url, list):
-            self._targetRequests.extend(map(lambda x: (tag, method, x, kwargs), url))
-        else:
-            raise TypeError('url must be str or list')
+        addRequestToList(self._targetRequests, url, tag, method, **kwargs)
 
     def getAllRequests(self):
         return self._targetRequests
@@ -80,13 +84,14 @@ class Crawler(object):
     """一个爬虫模块呀."""
 
     def __init__(self, pageProcessor, domain=''):
-        self._domain = domain
         self._pageProcessor = pageProcessor
+        self._domain = domain
+        self._requests = []
         self._scheduler = DequeScheduler()
-        self._pipeline = ConsolePipeline
+        self._pipelines = []
 
     def addRequest(self, url, tag=None, method='get', **kwargs):
-        self._request = (tag, method, url, kwargs)
+        addRequestToList(self._requests, url, tag, method, **kwargs)
         return self
 
     def setScheduler(self, scheduler):
@@ -94,17 +99,19 @@ class Crawler(object):
         return self
 
     def addPipeline(self, pipeline):
-        self._pipeline = pipeline
+        self._pipelines.append(pipeline)
         return self
 
     def run(self):
-        request = self._request
+        self._scheduler.add(self._requests)
+        request = self._scheduler.next()
         while request is not None:
             tag, method, url, kwargs = request
             response = requests.request(method, self._domain + url, **kwargs)
             tree = etree.HTML(response.text)
             page = Page(tag, url, response, tree)
             self._pageProcessor(page)
-            self._pipeline(page.getAllValue())
+            for pipeline in self._pipelines:
+                pipeline(page.getAllValue())
             self._scheduler.add(page.getAllRequests())
             request = self._scheduler.next()

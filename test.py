@@ -1,4 +1,4 @@
-from gotyou import Crawler
+from gotyou import Crawler, ConsolePipeline
 
 headers = {'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.95 Safari/537.36'}
 
@@ -13,4 +13,5 @@ def pageProcessor(page):
 
 (Crawler(pageProcessor, 'http://blog.csdn.net/')
         .addRequest('alezaizai', headers=headers)
+        .addPipeline(ConsolePipeline)
         .run())
