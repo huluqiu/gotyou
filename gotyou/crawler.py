@@ -118,6 +118,7 @@ class Crawler(object):
         return self
 
     def run(self):
+        logger.info('----------start----------')
         self._scheduler.add(self._requests)
         request = self._scheduler.next()
         while request is not None:
@@ -127,17 +128,18 @@ class Crawler(object):
                 response = requests.request(method, self._domain + url, **kwargs)
                 response.raise_for_status()
             except requests.ConnectionError as e:
-                logger.exception(e)
+                logger.error(e)
                 if self._connectionRetrynum < 5:
                     logger.info('retry(%d): after 30s..........' % self._connectionRetrynum)
                     self._connectionRetrynum += 1
                     self._scheduler.addLeft([request])
+                    sleep(30)
             except requests.Timeout as e:
-                logger.exception(e)
+                logger.error(e)
                 logger.info('put in tail of queue')
                 self._scheduler.add(request)
             except requests.HTTPError as e:
-                logger.exception(e)
+                logger.error(e)
                 logger.info('put away')
             else:
                 self._connectionRetrynum = 0
@@ -155,3 +157,4 @@ class Crawler(object):
                 if self._crawlerDelay > 0:
                     logger.info('delay: %d ..........' % self._crawlerDelay)
                     sleep(self._crawlerDelay)
+        logger.info('----------end----------')
