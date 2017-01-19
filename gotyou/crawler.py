@@ -4,6 +4,10 @@
 import requests
 from lxml import etree
 from collections import deque
+from time import sleep
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def addRequestToList(l, url, tag=None, method='get', **kwargs):
@@ -48,10 +52,13 @@ class Scheduler(object):
 
     """Docstring for Scheduler. """
 
-    def add(url):
+    def add(self, requests):
         pass
 
-    def next():
+    def addLeft(self, requests):
+        pass
+
+    def next(self):
         pass
 
 
@@ -67,11 +74,17 @@ class DequeScheduler(Scheduler):
     def add(self, requests):
         self._requestQueue.extend(requests)
 
+    def addLeft(self, requests):
+        self._requestQueue.extendleft(requests)
+
     def next(self):
         try:
             return self._requestQueue.popleft()
         except IndexError:
             return None
+
+    def __str__(self):
+        return str(self._requestQueue)
 
 
 def ConsolePipeline(targetValues):
@@ -83,12 +96,14 @@ class Crawler(object):
 
     """一个爬虫模块呀."""
 
-    def __init__(self, pageProcessor, domain=''):
+    def __init__(self, pageProcessor, domain='', crawlerDelay=0):
         self._pageProcessor = pageProcessor
         self._domain = domain
+        self._crawlerDelay = crawlerDelay
         self._requests = []
         self._scheduler = DequeScheduler()
         self._pipelines = []
+        self._connectionRetrynum = 0
 
     def addRequest(self, url, tag=None, method='get', **kwargs):
         addRequestToList(self._requests, url, tag, method, **kwargs)
@@ -107,11 +122,36 @@ class Crawler(object):
         request = self._scheduler.next()
         while request is not None:
             tag, method, url, kwargs = request
-            response = requests.request(method, self._domain + url, **kwargs)
-            tree = etree.HTML(response.text)
-            page = Page(tag, url, response, tree)
-            self._pageProcessor(page)
-            for pipeline in self._pipelines:
-                pipeline(page.getAllValue())
-            self._scheduler.add(page.getAllRequests())
-            request = self._scheduler.next()
+            logger.info('request: %s' % str(request))
+            try:
+                response = requests.request(method, self._domain + url, **kwargs)
+                response.raise_for_status()
+            except requests.ConnectionError as e:
+                logger.exception(e)
+                if self._connectionRetrynum < 5:
+                    logger.info('retry(%d): after 30s..........' % self._connectionRetrynum)
+                    self._connectionRetrynum += 1
+                    self._scheduler.addLeft([request])
+            except requests.Timeout as e:
+                logger.exception(e)
+                logger.info('put in tail of queue')
+                self._scheduler.add(request)
+            except requests.HTTPError as e:
+                logger.exception(e)
+                logger.info('put away')
+            else:
+                self._connectionRetrynum = 0
+                tree = etree.HTML(response.text)
+                page = Page(tag, url, response, tree)
+                # 通过 pageProcessor 提取值和链接
+                self._pageProcessor(page)
+                # 将目标值输出到 pipeline
+                for pipeline in self._pipelines:
+                    pipeline(page.getAllValue())
+                # 将新链接放到 scheduler
+                self._scheduler.add(page.getAllRequests())
+            finally:
+                request = self._scheduler.next()
+                if self._crawlerDelay > 0:
+                    logger.info('delay: %d ..........' % self._crawlerDelay)
+                    sleep(self._crawlerDelay)
