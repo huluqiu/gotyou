@@ -6,6 +6,8 @@ from lxml import etree
 from collections import deque
 from time import sleep
 import logging
+import pickle
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,9 @@ class Scheduler(object):
 
     """Docstring for Scheduler. """
 
+    def __init__(self):
+        self._requestQueue = None
+
     def add(self, requests):
         pass
 
@@ -61,13 +66,15 @@ class Scheduler(object):
     def next(self):
         pass
 
+    def __str__(self):
+        return str(self._requestQueue)
+
 
 class DequeScheduler(Scheduler):
 
     """Docstring for DequeScheduler. """
 
     def __init__(self):
-        """TODO: to be defined1. """
         Scheduler.__init__(self)
         self._requestQueue = deque()
 
@@ -83,8 +90,52 @@ class DequeScheduler(Scheduler):
         except IndexError:
             return None
 
-    def __str__(self):
-        return str(self._requestQueue)
+
+class FileCacheScheduler(Scheduler):
+
+    """Docstring for FileCacheScheduler. """
+
+    def __init__(self, path):
+        Scheduler.__init__(self)
+        self._path = path
+        self._requestQueue = deque()
+        self._firstTime = True
+
+    def add(self, requests):
+        self._requestQueue.extend(requests)
+
+    def addLeft(self, requests):
+        self._requestQueue.extendleft(requests)
+
+    def next(self):
+        if self._firstTime:
+            self._firstTime = False
+            cacheQueue = self.__getQueueFromCache()
+            if len(cacheQueue) > 0:
+                self._requestQueue = cacheQueue
+        self.__cacheQueue()
+        try:
+            return self._requestQueue.popleft()
+        except IndexError:
+            return None
+
+    def __getCachePath(self):
+        return self._path + '.requests.cache'
+
+    def __getQueueFromCache(self):
+        path = self.__getCachePath()
+        q = None
+        if os.path.exists(path):
+            with open(path, 'rb') as f:
+                q = pickle.load(f)
+        if isinstance(q, deque) is False:
+            q = deque()
+        return q
+
+    def __cacheQueue(self):
+        path = self.__getCachePath()
+        with open(path, 'wb') as f:
+            pickle.dump(self._requestQueue, f)
 
 
 def ConsolePipeline(targetValues):
