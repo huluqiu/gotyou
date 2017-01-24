@@ -22,5 +22,5 @@ def pageProcessor(page: Page):
 (Crawler(pageProcessor, 'http://blog.csdn.net/')
         .addRequest('alezaizai', headers=headers)
         .setScheduler(FileCacheScheduler('./'))
-        .addPipeline(ConsolePipeline)
+        .addPipeline(ConsolePipeline())
         .run())

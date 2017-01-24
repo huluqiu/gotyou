@@ -8,6 +8,7 @@ from time import sleep
 import logging
 import pickle
 import os
+import sqlite3
 
 logger = logging.getLogger(__name__)
 
@@ -138,9 +139,46 @@ class FileCacheScheduler(Scheduler):
             pickle.dump(self._requestQueue, f)
 
 
-def ConsolePipeline(targetValues):
-    for key, value in targetValues.items():
-        print(key, value)
+class Pipeline(object):
+
+    """Docstring for Pipeline. """
+
+    def process(page):
+        pass
+
+
+class ConsolePipeline(Pipeline):
+
+    """Docstring for ConsolePipeline. """
+
+    def __init__(self):
+        Pipeline.__init__(self)
+
+    def process(self, page: Page):
+        for key, value in page.getAllValue().items():
+            print(key, value)
+
+
+class Sqlite3Pipeline(Pipeline):
+
+    """Docstring for Sqlite3Pipelin. """
+
+    def __init__(self, dbPath='crawler.db'):
+        Pipeline.__init__(self)
+        self._dbPath = dbPath
+        self.db = sqlite3.connect(dbPath)
+        self.dbcur = self.db.cursor()
+
+    def __del__(self):
+        if self.db.in_transaction:
+            self.db.commit()
+
+        self.dbcur.close()
+        self.db.close()
+
+    def process(self, page):
+        if self.db.in_transaction:
+            self.db.commit()
 
 
 class Crawler(object):
@@ -170,8 +208,10 @@ class Crawler(object):
 
     def run(self):
         logger.info('----------start----------')
+
         self._scheduler.add(self._requests)
         request = self._scheduler.next()
+
         while request is not None:
             tag, method, url, kwargs = request
             logger.info('request: %s' % str(request))
@@ -200,7 +240,7 @@ class Crawler(object):
                 self._pageProcessor(page)
                 # 将目标值输出到 pipeline
                 for pipeline in self._pipelines:
-                    pipeline(page.getAllValue())
+                    pipeline.process(page)
                 # 将新链接放到 scheduler
                 self._scheduler.add(page.getAllRequests())
             finally:
@@ -208,4 +248,5 @@ class Crawler(object):
                 if self._crawlerDelay > 0:
                     logger.info('delay: %d ..........' % self._crawlerDelay)
                     sleep(self._crawlerDelay)
+
         logger.info('----------end----------')
