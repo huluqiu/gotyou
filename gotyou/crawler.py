@@ -9,6 +9,7 @@ import logging
 import pickle
 import os
 import sqlite3
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +180,21 @@ class Sqlite3Pipeline(Pipeline):
     def process(self, page):
         if self.db.in_transaction:
             self.db.commit()
+
+
+class JsonPipeline(Pipeline):
+
+    """Docstring for JsonPipeline. """
+
+    def __init__(self, path):
+        Pipeline.__init__(self)
+
+        self._path = path
+
+    def process(self, page):
+        pagePath = self._path + page.url.replace('/', '_') + '.json'
+        with open(pagePath, 'w') as f:
+            f.write(json.dumps(page.getAllValue()))
 
 
 class Crawler(object):
