@@ -122,7 +122,7 @@ class FileCacheScheduler(Scheduler):
             return None
 
     def __getCachePath(self):
-        return self._path + '.requests.cache'
+        return os.path.join(self._path, '.requests.cache')
 
     def __getQueueFromCache(self):
         path = self.__getCachePath()
@@ -193,6 +193,7 @@ class JsonPipeline(Pipeline):
 
     def process(self, page):
         pagePath = self._path + page.url.replace('/', '_') + '.json'
+        pagePath = os.path.join(self._path, page.tag + '_' + page.url.replace('/', '_') + '.json')
         with open(pagePath, 'w') as f:
             f.write(json.dumps(page.getAllValue()))
 
