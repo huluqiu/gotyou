@@ -204,10 +204,11 @@ class Crawler(object):
 
     """一个爬虫模块呀."""
 
-    def __init__(self, pageProcessor, domain='', crawlerDelay=0):
+    def __init__(self, pageProcessor, domain='', headers={}, crawlerDelay=0):
         self._pageProcessor = pageProcessor
         self._domain = domain
         self._crawlerDelay = crawlerDelay
+        self._headers = headers
         self._requests = []
         self._scheduler = DequeScheduler()
         self._pipelines = []
@@ -233,6 +234,9 @@ class Crawler(object):
 
         while request is not None:
             tag, method, url, kwargs = request
+            # 添加headers
+            if self._headers and 'headers' not in kwargs:
+                kwargs['headers'] = self._headers
             logger.info('request: %s' % str(request))
             try:
                 response = requests.request(method, self._domain + url, **kwargs)
