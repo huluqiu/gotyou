@@ -197,7 +197,7 @@ class JsonPipeline(Pipeline):
             os.makedirs(dirPath)
         pagePath = os.path.join(dirPath, page.url.replace('/', '_') + '.json')
         with open(pagePath, 'w') as f:
-            f.write(json.dumps(page.getAllValue()))
+            f.write(json.dumps(page.getAllValue(), ensure_ascii=False, indent=2))
 
 
 class Crawler(object):
