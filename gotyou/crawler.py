@@ -204,10 +204,10 @@ class Crawler(object):
 
     """一个爬虫模块呀."""
 
-    def __init__(self, pageProcessor, domain='', headers={}, crawlerDelay=0):
+    def __init__(self, pageProcessor, domain='', headers={}, delay=0):
         self._pageProcessor = pageProcessor
         self._domain = domain
-        self._crawlerDelay = crawlerDelay
+        self._delay = delay
         self._headers = headers
         self._requests = []
         self._scheduler = DequeScheduler()
@@ -237,8 +237,9 @@ class Crawler(object):
             # 添加headers
             if self._headers and 'headers' not in kwargs:
                 kwargs['headers'] = self._headers
-            logger.info('request: %s' % str(request))
+            logger.debug('request: %s' % str(request))
             try:
+                logger.info('请求页面: %s' % url)
                 response = requests.request(method, self._domain + url, **kwargs)
                 response.raise_for_status()
             except requests.ConnectionError as e:
@@ -260,16 +261,19 @@ class Crawler(object):
                 tree = etree.HTML(response.text)
                 page = Page(tag, url, response, tree)
                 # 通过 pageProcessor 提取值和链接
+                logger.info('请求成功, 开始分析处理...')
                 self._pageProcessor(page)
                 # 将目标值输出到 pipeline
+                logger.info('处理完毕，开始输出...')
                 for pipeline in self._pipelines:
                     pipeline.process(page)
+                logger.info('输出完毕, 下一个')
                 # 将新链接放到 scheduler
                 self._scheduler.add(page.getAllRequests())
             finally:
                 request = self._scheduler.next()
-                if self._crawlerDelay > 0:
-                    logger.info('delay: %d ..........' % self._crawlerDelay)
-                    sleep(self._crawlerDelay)
+                if self._delay > 0:
+                    logger.info('delay: %d ..........' % self._delay)
+                    sleep(self._delay)
 
         logger.info('----------end----------')
