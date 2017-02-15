@@ -192,8 +192,10 @@ class JsonPipeline(Pipeline):
         self._path = path
 
     def process(self, page):
-        pagePath = self._path + page.url.replace('/', '_') + '.json'
-        pagePath = os.path.join(self._path, page.tag + '_' + page.url.replace('/', '_') + '.json')
+        dirPath = os.path.join(self._path, page.tag)
+        if not os.path.exists(dirPath):
+            os.makedirs(dirPath)
+        pagePath = os.path.join(dirPath, page.url.replace('/', '_') + '.json')
         with open(pagePath, 'w') as f:
             f.write(json.dumps(page.getAllValue()))
 
