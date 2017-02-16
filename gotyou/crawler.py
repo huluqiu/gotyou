@@ -10,6 +10,7 @@ import pickle
 import os
 import sqlite3
 import json
+import atexit
 
 logger = logging.getLogger(__name__)
 
@@ -100,10 +101,7 @@ class FileCacheScheduler(Scheduler):
         self._requestQueue = deque()
         self._errorTasks = []
         self._firstTime = True
-
-    def __del__(self):
-        self._requestQueue.extend(self._errorTasks)
-        self.__cacheQueue()
+        atexit.register(self.saveErrorTasks)
 
     def add(self, requests):
         self._requestQueue.extend(requests)
@@ -126,8 +124,12 @@ class FileCacheScheduler(Scheduler):
     def recordErrorRequest(self, request):
         self._errorTasks.append(request)
 
+    def saveErrorTasks(self):
+        self._requestQueue.extend(self._errorTasks)
+        self.__cacheQueue()
+
     def __getCachePath(self):
-        return os.path.join(self._path, '.requests.cache')
+        return self._path
 
     def __getQueueFromCache(self):
         path = self.__getCachePath()
@@ -135,12 +137,15 @@ class FileCacheScheduler(Scheduler):
         if os.path.exists(path):
             with open(path, 'rb') as f:
                 q = pickle.load(f)
-        if isinstance(q, deque) is False:
+        if not isinstance(q, deque):
             q = deque()
         return q
 
     def __cacheQueue(self):
         path = self.__getCachePath()
+        cachedir = os.path.dirname(path)
+        if cachedir and not os.path.exists(cachedir):
+            os.makedirs(cachedir)
         with open(path, 'wb') as f:
             pickle.dump(self._requestQueue, f)
 
