@@ -14,15 +14,6 @@ import json
 logger = logging.getLogger(__name__)
 
 
-def addRequestToList(l, url, tag=None, method='get', **kwargs):
-    if isinstance(url, str):
-        l.append((tag, method, url, kwargs))
-    elif isinstance(url, list):
-        l.extend(map(lambda x: (tag, method, x, kwargs), url))
-    else:
-        raise TypeError('url must be str or list')
-
-
 class Page(object):
 
     """Docstring for Page. """
@@ -68,6 +59,9 @@ class Scheduler(object):
     def next(self):
         pass
 
+    def recordErrorRequest(self, request):
+        pass
+
     def __str__(self):
         return str(self._requestQueue)
 
@@ -92,6 +86,9 @@ class DequeScheduler(Scheduler):
         except IndexError:
             return None
 
+    def recordErrorRequest(self, request):
+        Scheduler.recordErrorRequest(self, request)
+
 
 class FileCacheScheduler(Scheduler):
 
@@ -101,7 +98,12 @@ class FileCacheScheduler(Scheduler):
         Scheduler.__init__(self)
         self._path = path
         self._requestQueue = deque()
+        self._errorTasks = []
         self._firstTime = True
+
+    def __del__(self):
+        self._requestQueue.extend(self._errorTasks)
+        self.__cacheQueue()
 
     def add(self, requests):
         self._requestQueue.extend(requests)
@@ -120,6 +122,9 @@ class FileCacheScheduler(Scheduler):
             return self._requestQueue.popleft()
         except IndexError:
             return None
+
+    def recordErrorRequest(self, request):
+        self._errorTasks.append(request)
 
     def __getCachePath(self):
         return os.path.join(self._path, '.requests.cache')
@@ -204,15 +209,15 @@ class Crawler(object):
 
     """一个爬虫模块呀."""
 
-    def __init__(self, pageProcessor, domain='', headers={}, delay=0):
+    def __init__(self, pageProcessor, domain='', headers={}, delay=0, timeout=None):
         self._pageProcessor = pageProcessor
         self._domain = domain
         self._delay = delay
+        self._timeout = timeout
         self._headers = headers
         self._requests = []
         self._scheduler = DequeScheduler()
         self._pipelines = []
-        self._connectionRetrynum = 0
 
     def addRequest(self, url, tag=None, method='get', **kwargs):
         addRequestToList(self._requests, url, tag, method, **kwargs)
@@ -237,39 +242,47 @@ class Crawler(object):
             # 添加headers
             if self._headers and 'headers' not in kwargs:
                 kwargs['headers'] = self._headers
+            if self._timeout and 'timeout' not in kwargs:
+                kwargs['timeout'] = self._timeout
             logger.debug('request: %s' % str(request))
             try:
                 logger.info('请求页面: %s' % url)
                 response = requests.request(method, self._domain + url, **kwargs)
                 response.raise_for_status()
             except requests.ConnectionError as e:
+                logger.error(request)
                 logger.error(e)
-                if self._connectionRetrynum < 5:
-                    logger.info('retry(%d): after 30s..........' % self._connectionRetrynum)
-                    self._connectionRetrynum += 1
-                    self._scheduler.addLeft([request])
-                    sleep(30)
+                self._scheduler.recordErrorRequest(request)
+                # 等待 30 秒给网络恢复
+                sleep(30)
             except requests.Timeout as e:
+                logger.error(request)
                 logger.error(e)
-                logger.info('put in tail of queue')
-                self._scheduler.add(request)
+                self._scheduler.recordErrorRequest(request)
             except requests.HTTPError as e:
+                logger.error(request)
                 logger.error(e)
-                logger.info('put away')
+                self._scheduler.recordErrorRequest(request)
             else:
                 self._connectionRetrynum = 0
                 tree = etree.HTML(response.text)
                 page = Page(tag, url, response, tree)
                 # 通过 pageProcessor 提取值和链接
                 logger.info('请求成功, 开始分析处理...')
-                self._pageProcessor(page)
-                # 将目标值输出到 pipeline
-                logger.info('处理完毕，开始输出...')
-                for pipeline in self._pipelines:
-                    pipeline.process(page)
-                logger.info('输出完毕, 下一个')
-                # 将新链接放到 scheduler
-                self._scheduler.add(page.getAllRequests())
+                try:
+                    self._pageProcessor(page)
+                except Exception as e:
+                    logger.error(request)
+                    logger.exception(e)
+                    self._scheduler.recordErrorRequest(request)
+                else:
+                    # 将目标值输出到 pipeline
+                    logger.info('处理完毕，开始输出...')
+                    for pipeline in self._pipelines:
+                        pipeline.process(page)
+                    logger.info('输出完毕, 下一个')
+                    # 将新链接放到 scheduler
+                    self._scheduler.add(page.getAllRequests())
             finally:
                 request = self._scheduler.next()
                 if self._delay > 0:
@@ -277,3 +290,12 @@ class Crawler(object):
                     sleep(self._delay)
 
         logger.info('----------end----------')
+
+
+def addRequestToList(l, url, tag, method, **kwargs):
+    if isinstance(url, str):
+        l.append((tag, method, url, kwargs))
+    elif isinstance(url, list):
+        l.extend(map(lambda x: (tag, method, x, kwargs), url))
+    else:
+        raise TypeError('url must be str or list')
