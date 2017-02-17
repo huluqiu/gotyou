@@ -269,12 +269,11 @@ class Crawler(object):
                 logger.error(e)
                 self._scheduler.recordErrorRequest(request)
             else:
-                self._connectionRetrynum = 0
-                tree = etree.HTML(response.text)
-                page = Page(tag, url, response, tree)
-                # 通过 pageProcessor 提取值和链接
-                logger.info('请求成功, 开始分析处理...')
                 try:
+                    tree = etree.HTML(response.text)
+                    page = Page(tag, url, response, tree)
+                    # 通过 pageProcessor 提取值和链接
+                    logger.info('请求成功, 开始分析处理...')
                     self._pageProcessor(page)
                 except Exception as e:
                     logger.error(request)
