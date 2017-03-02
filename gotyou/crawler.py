@@ -251,7 +251,7 @@ class Crawler(object):
                 kwargs['timeout'] = self._timeout
             logger.debug('request: %s' % str(request))
             try:
-                logger.info('请求页面: %s' % url)
+                logger.info('tag: %s, 请求页面: %s' % (tag, self._domain + url))
                 response = requests.request(method, self._domain + url, **kwargs)
                 response.raise_for_status()
             except requests.ConnectionError as e:
